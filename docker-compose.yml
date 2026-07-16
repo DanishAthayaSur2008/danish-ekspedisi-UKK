@@ -8,8 +8,8 @@ services:
     restart: always
     environment:
       MYSQL_DATABASE: ekspedisi_online
-      MYSQL_USER: ekspedisi
-      MYSQL_PASSWORD: ekspedisi_secret
+      MYSQL_USER: root
+      MYSQL_PASSWORD: admin123
       MYSQL_ROOT_PASSWORD: root_super_secret_pass
     ports:
       - "3306:3306"
@@ -26,7 +26,7 @@ services:
     container_name: ekspedisi_web
     restart: always
     environment:
-      - DATABASE_URL=mysql://ekspedisi:ekspedisi_secret@db:3306/ekspedisi_online
+      - DATABASE_URL=mysql://root:admin123@db:3306/ekspedisi_online
       - APP_URL=https://ekspedisi.local
       - NODE_ENV=production
     env_file:
