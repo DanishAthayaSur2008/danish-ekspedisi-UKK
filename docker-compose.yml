@@ -1,62 +1,147 @@
-version: '3.8'
+networks:
+  network-ujikom:
+    name: network-ujikom
+    driver: bridge
+
+volumes:
+  volume-ujikom:
+    name: volume-ujikom
 
 services:
-  # Container 1: Database MySQL
+  # ------------------------------------------------------------------
+  # DATABASE - MySQL, port 3306:3306, volume "volume-ujikom"
+  # ------------------------------------------------------------------
   db:
     image: mysql:8.0
-    container_name: ekspedisi_db
+    container_name: ekspedisi-db
     restart: always
     environment:
+      MYSQL_ROOT_PASSWORD: ekspedisi_root_secret
       MYSQL_DATABASE: ekspedisi_online
-      MYSQL_USER: root
-      MYSQL_PASSWORD: admin123
-      MYSQL_ROOT_PASSWORD: root_super_secret_pass
+      MYSQL_USER: ekspedisi
+      MYSQL_PASSWORD: ekspedisi_secret
     ports:
       - "3306:3306"
     volumes:
-      - mysql_data:/var/lib/mysql
+      - volume-ujikom:/var/lib/mysql
     networks:
-      - ekspedisi_network
+      - network-ujikom
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-u", "root", "-pekspedisi_root_secret"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
-  # Container 2: Aplikasi Next.js
-  web:
+  # ------------------------------------------------------------------
+  # MIGRATE - one-off job: prisma db push + prisma db seed, lalu exit.
+  # Dipisah dari web1/2/3 supaya db push & seed cuma jalan SEKALI,
+  # gak race condition kalau 3 container web jalan bareng-bareng.
+  # ------------------------------------------------------------------
+  migrate:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: ekspedisi_web
-    restart: always
-    environment:
-      - DATABASE_URL=mysql://root:admin123@db:3306/ekspedisi_online
-      - APP_URL=https://ekspedisi.local
-      - NODE_ENV=production
+    image: ekspedisi-app:latest
+    container_name: ekspedisi-migrate
     env_file:
       - .env
-    ports:
-      - "3000:3000"
+    environment:
+      DB_HOST: db
+      DB_PORT: "3306"
+      RUN_MIGRATIONS: "true"
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     networks:
-      - ekspedisi_network
+      - network-ujikom
+    restart: "no"
 
-  # Container 3: Nginx Web Server / SSL Reverse Proxy
-  nginx:
-    image: nginx:alpine
-    container_name: ekspedisi_nginx
+  # ------------------------------------------------------------------
+  # WEB x3 - custom image (scaling), HANYA expose (gak ada ports:)
+  # supaya gak bisa diakses langsung dari host, cuma lewat loadbalancer.
+  # ------------------------------------------------------------------
+  web1:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ekspedisi-app:latest
+    container_name: ekspedisi-web1
+    env_file:
+      - .env
+    environment:
+      DB_HOST: db
+      DB_PORT: "3306"
+      RUN_MIGRATIONS: "false"
+      INSTANCE_NAME: web1
+    expose:
+      - "3000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: always
+    networks:
+      - network-ujikom
+
+  web2:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ekspedisi-app:latest
+    container_name: ekspedisi-web2
+    env_file:
+      - .env
+    environment:
+      DB_HOST: db
+      DB_PORT: "3306"
+      RUN_MIGRATIONS: "false"
+      INSTANCE_NAME: web2
+    expose:
+      - "3000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: always
+    networks:
+      - network-ujikom
+
+  web3:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ekspedisi-app:latest
+    container_name: ekspedisi-web3
+    env_file:
+      - .env
+    environment:
+      DB_HOST: db
+      DB_PORT: "3306"
+      RUN_MIGRATIONS: "false"
+      INSTANCE_NAME: web3
+    expose:
+      - "3000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: always
+    networks:
+      - network-ujikom
+
+  # ------------------------------------------------------------------
+  # LOADBALANCER - nginx, WAJIB 8080:80 (soal), + 8443:443 (SSL bonus)
+  # ------------------------------------------------------------------
+  loadbalancer:
+    image: nginx:stable-alpine
+    container_name: ekspedisi-lb
     restart: always
     ports:
-      - "80:80"
-      - "443:443"
+      - "8080:80"
+      - "8443:443"
     volumes:
-      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./ssl:/etc/nginx/ssl:ro
     depends_on:
-      - web
+      - web1
+      - web2
+      - web3
     networks:
-      - ekspedisi_network
-
-volumes:
-  mysql_data:
-
-networks:
-  ekspedisi_network:
-    driver: bridge
+      - network-ujikom

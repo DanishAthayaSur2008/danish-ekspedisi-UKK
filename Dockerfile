@@ -1,49 +1,70 @@
-FROM node:20-alpine AS base
+# syntax=docker/dockerfile:1
+# Dockerfile - Ekspedisi Online (Next.js + Prisma + MySQL)
+# Dipakai bareng-bareng oleh service: migrate, web1, web2, web3 (docker-compose.yml)
 
-# STAGE 1: Install dependencies
-FROM base AS deps
-RUN apk add --no-cache libc6-compat openssl
+########################################
+# Stage 1: Dependencies
+########################################
+FROM node:20-slim AS deps
 WORKDIR /app
+
+# openssl dibutuhkan Prisma query engine buat resolve versi lib yang tepat
+RUN apt-get update -y \
+    && apt-get install -y --no-install-recommends openssl \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY package.json package-lock.json ./
-COPY prisma ./prisma
 RUN npm ci
-RUN npx prisma generate
 
-# STAGE 2: Build aplikasi Next.js
-FROM base AS builder
+########################################
+# Stage 2: Builder
+########################################
+FROM node:20-slim AS builder
 WORKDIR /app
+
+RUN apt-get update -y \
+    && apt-get install -y --no-install-recommends openssl \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-ENV NEXT_TELEMETRY_DISABLED=1
+# Generate Prisma Client sesuai schema.prisma SEBELUM next build
+# (di-generate di image yang sama dengan runtime, biar gak ada mismatch OS/libc)
 RUN npx prisma generate
+
+# Build production Next.js
 RUN npm run build
 
-# STAGE 3: Production runner
-FROM base AS runner
+########################################
+# Stage 3: Runner (production, image final)
+########################################
+FROM node:20-slim AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
-ENV NEXT_TELEMETRY_DISABLED=1
+ENV PORT=3000
 
-# Install openssl (untuk Prisma) dan netcat (untuk script entrypoint check DB)
-RUN apk add --no-cache openssl netcat-openbsd
+# openssl -> dibutuhkan prisma query engine saat runtime
+# netcat-openssl -> dipakai entrypoint.sh buat nunggu MySQL ready
+RUN apt-get update -y \
+    && apt-get install -y --no-install-recommends openssl netcat-openssl \
+    && rm -rf /var/lib/apt/lists/*
 
-# Salin aset dan berkas hasil kompilasi dari stage builder
+# Copy hasil build & dependency production dari stage builder
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package.json ./package.json
+COPY --from=builder /app/package-lock.json ./package-lock.json
 COPY --from=builder /app/prisma ./prisma
-COPY --from=builder /app/entrypoint.sh ./entrypoint.sh
+COPY --from=builder /app/next.config.ts ./next.config.ts
 
-# Berikan izin akses eksekusi pada script entrypoint
-RUN chmod +x ./entrypoint.sh
+# Entrypoint: nunggu DB ready, jalanin migrate/seed (kalau ditandai), atau start app
+COPY entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
 
 EXPOSE 3000
 
-ENV PORT=3000
-ENV HOSTNAME="0.0.0.0"
-
-ENTRYPOINT ["./entrypoint.sh"]
+ENTRYPOINT ["/entrypoint.sh"]
+CMD ["npm", "run", "start"]
