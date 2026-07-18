@@ -1,29 +1,9 @@
 import type { NextConfig } from "next";
 import path from "node:path";
-import withPWA from "next-pwa";
+import withPWAInit from "next-pwa";
 
-const nextConfig: NextConfig = {
-  output: 'standalone',
-  outputFileTracingRoot: path.join(process.cwd()),
-  reactStrictMode: true,
-  images: {
-    remotePatterns: [
-      {
-        protocol: "https",
-        hostname: "images.unsplash.com",
-        pathname: "/**",
-      },
-      {
-        protocol: "https",
-        hostname: "plus.unsplash.com",
-        pathname: "/**",
-      },
-    ],
-    formats: ["image/avif", "image/webp"],
-  },
-};
-
-export default withPWA({
+// 1. Inisialisasi Konfigurasi PWA dan Caching Rules Lu
+const withPWA = withPWAInit({
   dest: "public",
   register: true,
   skipWaiting: true,
@@ -68,6 +48,29 @@ export default withPWA({
       },
     },
   ],
-})(nextConfig);
+});
 
-module.exports = nextConfig;
+// 2. Konfigurasi Utama Aplikasi Next.js Ekspedisi Lu
+const nextConfig: NextConfig = {
+  output: 'standalone', // Penting untuk Docker deployment!
+  outputFileTracingRoot: path.join(process.cwd()),
+  reactStrictMode: true,
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "images.unsplash.com",
+        pathname: "/**",
+      },
+      {
+        protocol: "https",
+        hostname: "plus.unsplash.com",
+        pathname: "/**",
+      },
+    ],
+    formats: ["image/avif", "image/webp"],
+  },
+};
+
+// 3. Gabungkan dan Export Menggunakan Standard TypeScript ESM
+export default withPWA(nextConfig);
