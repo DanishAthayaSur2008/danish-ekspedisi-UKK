@@ -48,7 +48,7 @@ ENV PORT=3000
 # openssl -> dibutuhkan prisma query engine saat runtime
 # netcat-openssl -> dipakai entrypoint.sh buat nunggu MySQL ready
 RUN apt-get update -y \
-    && apt-get install -y --no-install-recommends openssl netcat-openssl \
+    && apt-get install -y --no-install-recommends openssl netcat-openbsd \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy hasil build & dependency production dari stage builder
@@ -66,5 +66,5 @@ RUN chmod +x /app/entrypoint.sh
 
 EXPOSE 3000
 
-ENTRYPOINT ["/entrypoint.sh"]
+ENTRYPOINT ["./entrypoint.sh"]
 CMD ["npm", "run", "start"]

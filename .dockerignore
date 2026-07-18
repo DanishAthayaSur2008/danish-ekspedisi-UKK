@@ -54,4 +54,4 @@ coverage
 
 # Prisma — KECUALI schema dan migrations yang diperlukan
 # (prisma/schema.prisma dan prisma/migrations/ harus ikut)
-prisma/seed.ts
+# prisma/seed.ts
