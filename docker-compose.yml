@@ -8,6 +8,9 @@ volumes:
     name: app-volume
   db-volume:
     name: db-volume
+  # ---------- Volume Tambahan buat Shared Sessions Captcha & Login ----------
+  session-volume:
+    name: session-volume
 
 services:
   # ------------------------------------------------------------------
@@ -59,8 +62,7 @@ services:
 
   # ------------------------------------------------------------------
   # APP x2 (scaling) - custom image, HANYA expose (gak ada ports:)
-  # Pakai volume "app-volume" bersama buat public/uploads (shared antar
-  # container, biar file yang diupload lewat app1 tetep kebaca di app2)
+  # Pakai volume bersama untuk uploads DAN sessions share lintas kontainer
   # ------------------------------------------------------------------
   app1:
     build:
@@ -77,6 +79,7 @@ services:
       INSTANCE_NAME: app1
     volumes:
       - app-volume:/app/public/uploads
+      - session-volume:/app/sessions_share # <-- Jembatan sinkronisasi session JSON
     expose:
       - "3000"
     depends_on:
@@ -101,6 +104,7 @@ services:
       INSTANCE_NAME: app2
     volumes:
       - app-volume:/app/public/uploads
+      - session-volume:/app/sessions_share # <-- Jembatan sinkronisasi session JSON
     expose:
       - "3000"
     depends_on:
