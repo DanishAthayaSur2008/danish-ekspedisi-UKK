@@ -13,7 +13,7 @@ echo "✅ [entrypoint] Database sudah bisa dikoneksi."
 
 # Container ini dipakai untuk 2 peran (diatur lewat env RUN_MIGRATIONS di docker-compose.yml):
 #   1. RUN_MIGRATIONS=true  -> service "migrate": jalanin prisma db push + db seed lalu EXIT (one-off job)
-#   2. RUN_MIGRATIONS=false -> service "web1/web2/web3": langsung start Next.js
+#   2. RUN_MIGRATIONS=false -> service "app1/app2": langsung start Next.js
 
 if [ "$RUN_MIGRATIONS" = "true" ]; then
   echo "🚀 [migrate] Menjalankan: npx prisma db push"
@@ -26,5 +26,5 @@ if [ "$RUN_MIGRATIONS" = "true" ]; then
   exit 0
 fi
 
-echo "🚀 [web:${INSTANCE_NAME:-unknown}] Menjalankan aplikasi Next.js..."
+echo "🚀 [app:${INSTANCE_NAME:-unknown}] Menjalankan aplikasi Next.js..."
 exec "$@"
